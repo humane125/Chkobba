@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="89" height="131">
+<def>
+	<path id="carreau" d="M37,58a20,20 0,0,0 15,0 a20,20 0,0,0 0,15 a20,20 0,0,0 -15,0 a20,20 0,0,0 0,-15z" fill="#f00" transform="rotate(45,44.5,65.5)"/>
+</def>
+<rect x="2" y="2" width="85" height="127" fill="#000"/>
+<rect x="3" y="3" width="83" height="125" fill="#fff"/>
+<use xlink:href="#carreau" transform="translate(-21,-42)"/>
+<use xlink:href="#carreau" transform="translate(-21,42)"/>
+<use xlink:href="#carreau" transform="translate(21,-42)"/>
+<use xlink:href="#carreau" transform="translate(21,42)"/>
+</svg>
