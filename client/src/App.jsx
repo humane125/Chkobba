@@ -19,9 +19,12 @@ function App() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:4000';
-    const socketPath = import.meta.env.VITE_SOCKET_PATH || '/socket.io';
-    const client = io(serverUrl, { path: socketPath });
+    const config = resolveSocketConfig();
+    const client = io(config.serverUrl, { path: config.socketPath });
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('Connecting to socket server:', config.serverUrl, config.socketPath);
+    }
     setSocket(client);
 
     const handleConnect = () => {
@@ -215,6 +218,39 @@ function App() {
       </main>
     </div>
   );
+}
+
+function resolveSocketConfig() {
+  if (typeof window === 'undefined') {
+    return {
+      serverUrl: import.meta.env.VITE_SERVER_URL || 'http://localhost:4000',
+      socketPath: import.meta.env.VITE_SOCKET_PATH || '/socket.io',
+    };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const paramServer = params.get('server');
+  const paramPath = params.get('socketPath');
+  if (paramServer) {
+    window.localStorage.setItem('CHKOBBA_SERVER_URL', paramServer);
+  }
+  if (paramPath) {
+    window.localStorage.setItem('CHKOBBA_SOCKET_PATH', paramPath);
+  }
+  const storedServer = window.localStorage.getItem('CHKOBBA_SERVER_URL');
+  const storedPath = window.localStorage.getItem('CHKOBBA_SOCKET_PATH');
+  const serverUrl =
+    paramServer ||
+    storedServer ||
+    import.meta.env.VITE_SERVER_URL ||
+    window.__CHKOBBA_SERVER_URL__ ||
+    'http://localhost:4000';
+  const socketPath =
+    paramPath ||
+    storedPath ||
+    import.meta.env.VITE_SOCKET_PATH ||
+    window.__CHKOBBA_SOCKET_PATH__ ||
+    '/socket.io';
+  return { serverUrl, socketPath };
 }
 
 export default App;
