@@ -223,8 +223,8 @@ function App() {
 function resolveSocketConfig() {
   if (typeof window === 'undefined') {
     return {
-      serverUrl: import.meta.env.VITE_SERVER_URL || 'http://localhost:4000',
-      socketPath: import.meta.env.VITE_SOCKET_PATH || '/socket.io',
+      serverUrl: 'https://chkobba.onrender.com' || import.meta.env.VITE_SERVER_URL,
+      socketPath: '/socket.io' || import.meta.env.VITE_SOCKET_PATH
     };
   }
   const params = new URLSearchParams(window.location.search);
@@ -239,6 +239,7 @@ function resolveSocketConfig() {
   const storedServer = window.localStorage.getItem('CHKOBBA_SERVER_URL');
   const storedPath = window.localStorage.getItem('CHKOBBA_SOCKET_PATH');
   const serverUrl =
+  'https://chkobba.onrender.com' || 
     paramServer ||
     storedServer ||
     import.meta.env.VITE_SERVER_URL ||

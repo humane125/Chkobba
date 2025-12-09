@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     allowedHosts: [
       'unrubbed-anson-convolutional.ngrok-free.dev',
+      'https://chkobba.onrender.com',
       process.env.VITE_ALLOWED_HOST,
     ].filter(Boolean),
   },
