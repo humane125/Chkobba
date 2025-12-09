@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Builds
+client/dist/
+server/.vercel/
+
+# Env / misc
+.env
+*.log
+.DS_Store
+Thumbs.db
+
+# Vite/React local files
+client/.env*
