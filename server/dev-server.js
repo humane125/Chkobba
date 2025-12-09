@@ -8,6 +8,14 @@ const PORT = process.env.PORT || 4000;
 
 const app = express();
 app.use(cors());
+
+app.use((req, res, next) => {
+  res.setHeader('ngrok-skip-browser-warning', '1');
+  /* eslint-disable no-console */
+  console.log(`[dev-server] ${req.method} ${req.url} (skipping ngrok warning)`);
+  /* eslint-enable no-console */
+  next();
+});
 app.get('/', (req, res) => {
   res.json({ ok: true });
 });

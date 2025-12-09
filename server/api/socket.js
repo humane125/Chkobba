@@ -9,6 +9,9 @@ module.exports = (req, res) => {
     return;
   }
 
+  res.setHeader('ngrok-skip-browser-warning', '1');
+  console.log('[socket API] ngrok warning header emitted');
+
   if (!io) {
     io = new Server(res.socket.server, {
       path: '/api/socket',
