@@ -28,9 +28,13 @@ export function computeCaptureTargets(card, tableCards = []) {
   const cardValue = card.value ?? card.rank ?? 0;
   const sameValues = tableCards.filter((tableCard) => tableCard.value === cardValue);
   if (sameValues.length) {
-    return sameValues;
+    return [sameValues[0]];
   }
-  return findCombination(tableCards, cardValue);
+  const combo = findCombination(tableCards, cardValue);
+  if (combo.length) {
+    return combo;
+  }
+  return [];
 }
 
 function findCombination(cards, target) {

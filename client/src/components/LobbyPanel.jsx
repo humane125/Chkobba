@@ -12,6 +12,7 @@ function LobbyPanel({
   lobbyState,
   onStartGame,
   onLeaveRoom,
+  onCopyRoomCode,
   roomModeChoice,
   roomTargetChoice,
   onRoomModeChange,
@@ -63,7 +64,17 @@ function LobbyPanel({
       <div className="panel-heading">
         <h2>Lobby</h2>
         {session.roomCode && (
-          <span className="room-pill">Room {session.roomCode}</span>
+          <span className="room-pill">
+            Room {session.roomCode}{' '}
+            <button
+              type="button"
+              className="ghost tiny"
+              onClick={onCopyRoomCode}
+              title="Copy room code"
+            >
+              Copy
+            </button>
+          </span>
         )}
       </div>
       <div className="form-group">
@@ -363,6 +374,7 @@ LobbyPanel.propTypes = {
   }),
   onStartGame: PropTypes.func.isRequired,
   onLeaveRoom: PropTypes.func.isRequired,
+  onCopyRoomCode: PropTypes.func.isRequired,
   roomModeChoice: PropTypes.string.isRequired,
   roomTargetChoice: PropTypes.string.isRequired,
   onRoomModeChange: PropTypes.func.isRequired,

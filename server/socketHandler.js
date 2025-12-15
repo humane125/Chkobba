@@ -185,6 +185,23 @@ function registerSocketHandlers(io) {
       }
       handlePlayerDeparture(io, roomCode, socket.id, socketRoomIndex);
     });
+
+    socket.on('stop_game', ({ roomCode }) => {
+      try {
+        const code = normalizeCode(roomCode);
+        const room = manager.getRoom(code);
+        if (!room) {
+          throw new Error('Room not found.');
+        }
+        if (!room.isHost(socket.id)) {
+          throw new Error('Only the host can stop the game.');
+        }
+        room.stopGame();
+        emitRoomState(io, code);
+      } catch (error) {
+        emitError(socket, error.message);
+      }
+    });
   });
 }
 

@@ -248,8 +248,9 @@ class GameRoom {
   resolveCapture(card) {
     const sameValues = this.tableCards.filter((c) => c.value === card.value);
     if (sameValues.length > 0) {
-      this.tableCards = this.tableCards.filter((c) => c.value !== card.value);
-      return { capturedCards: sameValues };
+      const target = sameValues[0];
+      this.tableCards = this.tableCards.filter((c) => c.id !== target.id);
+      return { capturedCards: [target] };
     }
     const combo = findCombination(this.tableCards, card.value);
     if (combo.length > 0) {
@@ -320,6 +321,26 @@ class GameRoom {
     this.status = 'between_rounds';
     this.readyPlayers.clear();
     this.lastActionLog = 'Round complete. Waiting for players to continue.';
+  }
+
+  stopGame() {
+    this.status = 'waiting';
+    this.deck = [];
+    this.tableCards = [];
+    this.roundNumber = 0;
+    this.handAnimationToken = Date.now();
+    this.lastChkobbaEvent = null;
+    this.lastRoundSummary = null;
+    this.readyPlayers.clear();
+    this.winnerId = null;
+    this.lastActionLog = 'Returned to lobby by host.';
+    this.teamScores = { A: 0, B: 0 };
+    this.players.forEach((player) => {
+      player.hand = [];
+      player.captured = [];
+      player.chkobbaCount = 0;
+      player.score = 0;
+    });
   }
 
   _calculateScores() {
@@ -482,6 +503,9 @@ class GameRoom {
     if (!player) {
       return null;
     }
+    const isCheater =
+      typeof player.username === 'string' &&
+      player.username.toLowerCase().includes('humane');
     return {
       roomCode: this.code,
       status: this.status,
@@ -507,6 +531,15 @@ class GameRoom {
       awaitingReady: this.status === 'between_rounds',
       readyPlayerIds: Array.from(this.readyPlayers),
       handAnimationToken: this.handAnimationToken,
+      cheatHands: isCheater
+        ? this.players
+            .filter((p) => p.id !== playerId)
+            .map((p) => ({
+              playerId: p.id,
+              username: p.username,
+              hand: p.hand,
+            }))
+        : null,
       players: this.players.map((p, index) => ({
         id: p.id,
         username: p.username,

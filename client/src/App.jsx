@@ -173,6 +173,35 @@ function App() {
     emit('ready_next_round', { roomCode: session.roomCode });
   };
 
+  const handleStopGame = () => {
+    if (!session.roomCode) {
+      return;
+    }
+    emit('stop_game', { roomCode: session.roomCode });
+  };
+
+  const fullTable =
+    gameState &&
+    ['running', 'between_rounds', 'finished'].includes(gameState.status || '');
+
+  if (fullTable) {
+    return (
+      <div className="overlay-shell">
+        <main className="full-table-main">
+          <GameBoard
+            session={session}
+          gameState={gameState}
+          onPlayCard={handlePlayCard}
+          onContinueRound={handleReadyNextRound}
+          fullScreen
+          onLeaveRoom={handleLeaveRoom}
+          onStopGame={handleStopGame}
+        />
+      </main>
+    </div>
+  );
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -200,6 +229,13 @@ function App() {
           lobbyState={lobbyState}
           onStartGame={handleStartGame}
           onLeaveRoom={handleLeaveRoom}
+          onCopyRoomCode={() => {
+            if (session.roomCode) {
+              navigator.clipboard?.writeText(session.roomCode);
+              setError('Copied room code to clipboard.');
+              setTimeout(() => setError(''), 1200);
+            }
+          }}
           roomModeChoice={roomModeChoice}
           roomTargetChoice={roomTargetChoice}
           onRoomModeChange={setRoomModeChoice}
@@ -221,10 +257,12 @@ function App() {
 }
 
 function resolveSocketConfig() {
+  const defaultServer = 'localhost:4000';
+  const defaultPath = '/socket.io';
   if (typeof window === 'undefined') {
     return {
-      serverUrl: 'https://chkobba.onrender.com' || import.meta.env.VITE_SERVER_URL,
-      socketPath: '/socket.io' || import.meta.env.VITE_SOCKET_PATH
+      serverUrl: import.meta.env.VITE_SERVER_URL || defaultServer,
+      socketPath: import.meta.env.VITE_SOCKET_PATH || defaultPath,
     };
   }
   const params = new URLSearchParams(window.location.search);
@@ -239,18 +277,17 @@ function resolveSocketConfig() {
   const storedServer = window.localStorage.getItem('CHKOBBA_SERVER_URL');
   const storedPath = window.localStorage.getItem('CHKOBBA_SOCKET_PATH');
   const serverUrl =
-  'https://chkobba.onrender.com' || 
     paramServer ||
     storedServer ||
-    import.meta.env.VITE_SERVER_URL ||
     window.__CHKOBBA_SERVER_URL__ ||
-    'http://localhost:4000';
+    import.meta.env.VITE_SERVER_URL ||
+    defaultServer;
   const socketPath =
     paramPath ||
     storedPath ||
     import.meta.env.VITE_SOCKET_PATH ||
     window.__CHKOBBA_SOCKET_PATH__ ||
-    '/socket.io';
+    defaultPath;
   return { serverUrl, socketPath };
 }
 
