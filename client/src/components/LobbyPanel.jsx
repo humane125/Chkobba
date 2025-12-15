@@ -12,6 +12,7 @@ function LobbyPanel({
   lobbyState,
   onStartGame,
   onLeaveRoom,
+  onChooseTeam,
   onCopyRoomCode,
   roomModeChoice,
   roomTargetChoice,
@@ -20,6 +21,8 @@ function LobbyPanel({
   onUpdateSettings,
   onKickPlayer,
   onPromotePlayer,
+  onRequestSwitch,
+  onRespondSwitch,
   error,
 }) {
   const [targetScoreDraft, setTargetScoreDraft] = useState(
@@ -34,10 +37,19 @@ function LobbyPanel({
   const derivedHost =
     session.isHost ||
     players.some((player) => player.id === session.playerId && player.isHost);
+  const teams = lobbyState?.teams ?? [];
+  const selfPlayer = players.find((p) => p.id === session.playerId);
+  const selfTeam = selfPlayer?.team;
+  const is2v2 = lobbyState?.mode === '2v2';
+  const switchableStatus =
+    lobbyState?.status === 'waiting' || lobbyState?.status === 'finished';
+  const teamASeats = teams.find((t) => t.key === 'A')?.members?.length ?? 0;
+  const teamBSeats = teams.find((t) => t.key === 'B')?.members?.length ?? 0;
   const canStart =
     derivedHost &&
     lobbyState?.status === 'waiting' &&
-    lobbyState?.maxPlayers === players.length;
+    lobbyState?.maxPlayers === players.length &&
+    (lobbyState?.mode !== '2v2' || (teamASeats === 2 && teamBSeats === 2));
   const settingsLocked = lobbyState?.status === 'running';
   const availableSlots = lobbyState?.availableSlots ?? 0;
 
@@ -163,30 +175,59 @@ function LobbyPanel({
                       <em>{player.score} pts</em>
                     </div>
                   </div>
-                  {derivedHost && player.id !== session.playerId && (
+                  {(player.id !== session.playerId &&
+                    (derivedHost ||
+                      (is2v2 && switchableStatus))) && (
                     <div className="player-actions">
-                      <button
-                        type="button"
-                        className="ghost tiny"
-                        onClick={() => onPromotePlayer(player.id)}
-                        title="Transfer host"
-                      >
-                        Promote
-                      </button>
-                      <button
-                        type="button"
-                        className="danger tiny"
-                        onClick={() => onKickPlayer(player.id)}
-                        title="Remove from room"
-                      >
-                        Kick
-                      </button>
+                      {derivedHost && (
+                        <>
+                          <button
+                            type="button"
+                            className="ghost tiny"
+                            onClick={() => onPromotePlayer(player.id)}
+                            title="Transfer host"
+                          >
+                            Promote
+                          </button>
+                          <button
+                            type="button"
+                            className="danger tiny"
+                            onClick={() => onKickPlayer(player.id)}
+                            title="Remove from room"
+                          >
+                            Kick
+                          </button>
+                        </>
+                      )}
+                      {is2v2 && switchableStatus && (
+                        <button
+                          type="button"
+                          className="ghost tiny"
+                          onClick={() => onRequestSwitch(player.id)}
+                          title="Request team switch"
+                          disabled={
+                            player.team === selfTeam || !player.team || !selfTeam
+                          }
+                        >
+                          Switch
+                        </button>
+                      )}
                     </div>
                   )}
                 </li>
               ))}
             </ul>
           </div>
+
+          {lobbyState?.mode === '2v2' && (
+            <TeamSelection
+              teamASeats={teamASeats}
+              teamBSeats={teamBSeats}
+              selfTeam={selfTeam}
+              disabled={settingsLocked}
+              onChooseTeam={onChooseTeam}
+            />
+          )}
 
           {lobbyState?.mode === '2v2' && (
             <TeamLayout teams={lobbyState.teams ?? []} />
@@ -346,6 +387,33 @@ function TeamLayout({ teams }) {
   );
 }
 
+function TeamSelection({ teamASeats, teamBSeats, selfTeam, disabled, onChooseTeam }) {
+  return (
+    <div className="team-selection">
+      <h4>Choose your team</h4>
+      <div className="team-selection-buttons">
+        <button
+          type="button"
+          className={selfTeam === 'A' ? 'active' : 'ghost'}
+          onClick={() => onChooseTeam('A')}
+          disabled={disabled || selfTeam === 'A' || teamASeats >= 2}
+        >
+          Team A ({teamASeats}/2)
+        </button>
+        <button
+          type="button"
+          className={selfTeam === 'B' ? 'active' : 'ghost'}
+          onClick={() => onChooseTeam('B')}
+          disabled={disabled || selfTeam === 'B' || teamBSeats >= 2}
+        >
+          Team B ({teamBSeats}/2)
+        </button>
+      </div>
+      <p className="muted small">Teams lock when the host starts the game.</p>
+    </div>
+  );
+}
+
 LobbyPanel.propTypes = {
   username: PropTypes.string.isRequired,
   onUsernameChange: PropTypes.func.isRequired,
@@ -374,6 +442,7 @@ LobbyPanel.propTypes = {
   }),
   onStartGame: PropTypes.func.isRequired,
   onLeaveRoom: PropTypes.func.isRequired,
+  onChooseTeam: PropTypes.func.isRequired,
   onCopyRoomCode: PropTypes.func.isRequired,
   roomModeChoice: PropTypes.string.isRequired,
   roomTargetChoice: PropTypes.string.isRequired,
@@ -382,6 +451,8 @@ LobbyPanel.propTypes = {
   onUpdateSettings: PropTypes.func.isRequired,
   onKickPlayer: PropTypes.func.isRequired,
   onPromotePlayer: PropTypes.func.isRequired,
+  onRequestSwitch: PropTypes.func.isRequired,
+  onRespondSwitch: PropTypes.func.isRequired,
   error: PropTypes.string,
 };
 
@@ -424,6 +495,18 @@ LobbyPanel.defaultProps = {
 
 TeamLayout.defaultProps = {
   teams: [],
+};
+
+TeamSelection.propTypes = {
+  teamASeats: PropTypes.number.isRequired,
+  teamBSeats: PropTypes.number.isRequired,
+  selfTeam: PropTypes.string,
+  disabled: PropTypes.bool.isRequired,
+  onChooseTeam: PropTypes.func.isRequired,
+};
+
+TeamSelection.defaultProps = {
+  selfTeam: null,
 };
 
 export default LobbyPanel;

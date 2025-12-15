@@ -166,11 +166,33 @@ function App() {
     emit('transfer_host', { roomCode: session.roomCode, playerId });
   };
 
+  const handleRequestSwitch = (targetId) => {
+    if (!session.roomCode) {
+      return;
+    }
+    emit('request_switch', { roomCode: session.roomCode, targetId });
+  };
+
+  const handleRespondSwitch = (accepted, roomCodeOverride) => {
+    const roomCode = roomCodeOverride || session.roomCode;
+    if (!roomCode) {
+      return;
+    }
+    emit('respond_switch', { roomCode, accepted });
+  };
+
   const handleReadyNextRound = () => {
     if (!session.roomCode) {
       return;
     }
     emit('ready_next_round', { roomCode: session.roomCode });
+  };
+
+  const handleChooseTeam = (team) => {
+    if (!session.roomCode) {
+      return;
+    }
+    emit('choose_team', { roomCode: session.roomCode, team });
   };
 
   const handleStopGame = () => {
@@ -188,19 +210,21 @@ function App() {
     return (
       <div className="overlay-shell">
         <main className="full-table-main">
-          <GameBoard
-            session={session}
+        <GameBoard
+          session={session}
           gameState={gameState}
           onPlayCard={handlePlayCard}
           onContinueRound={handleReadyNextRound}
+          onRespondSwitch={handleRespondSwitch}
           fullScreen
           onLeaveRoom={handleLeaveRoom}
           onStopGame={handleStopGame}
+          socket={socket}
         />
       </main>
     </div>
   );
-  }
+}
 
   return (
     <div className="app-shell">
@@ -229,6 +253,7 @@ function App() {
           lobbyState={lobbyState}
           onStartGame={handleStartGame}
           onLeaveRoom={handleLeaveRoom}
+          onChooseTeam={handleChooseTeam}
           onCopyRoomCode={() => {
             if (session.roomCode) {
               navigator.clipboard?.writeText(session.roomCode);
@@ -243,6 +268,8 @@ function App() {
           onUpdateSettings={handleUpdateSettings}
           onKickPlayer={handleKickPlayer}
           onPromotePlayer={handlePromotePlayer}
+          onRequestSwitch={handleRequestSwitch}
+          onRespondSwitch={handleRespondSwitch}
           error={error}
         />
         <GameBoard
@@ -250,6 +277,8 @@ function App() {
           gameState={gameState}
           onPlayCard={handlePlayCard}
           onContinueRound={handleReadyNextRound}
+          onRespondSwitch={handleRespondSwitch}
+          socket={socket}
         />
       </main>
     </div>
@@ -257,7 +286,7 @@ function App() {
 }
 
 function resolveSocketConfig() {
-  const defaultServer = 'chkobba.onrender.com';
+  const defaultServer = 'localhost:4000';
   const defaultPath = '/socket.io';
   if (typeof window === 'undefined') {
     return {

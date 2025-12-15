@@ -202,6 +202,80 @@ function registerSocketHandlers(io) {
         emitError(socket, error.message);
       }
     });
+
+    socket.on('request_switch', ({ roomCode, targetId }) => {
+      try {
+        const code = normalizeCode(roomCode);
+        const room = manager.getRoom(code);
+        if (!room) {
+          throw new Error('Room not found.');
+        }
+        const target = room.requestSwitch(socket.id, targetId);
+        const targetSocket = io.sockets.sockets.get(target.id);
+        if (!targetSocket) {
+          room.pendingSwitch = null;
+          throw new Error('Player is not connected.');
+        }
+        const fromPlayer =
+          manager
+            .getRoom(code)
+            ?.players.find((p) => p.id === socket.id)?.username || 'Player';
+        targetSocket.emit('switch_request', {
+          fromId: socket.id,
+          fromName: fromPlayer,
+          roomCode: code,
+        });
+        emitRoomState(io, code);
+      } catch (error) {
+        emitError(socket, error.message);
+      }
+    });
+
+    socket.on('respond_switch', ({ roomCode, accepted }) => {
+      try {
+        const code = normalizeCode(roomCode);
+        const room = manager.getRoom(code);
+        if (!room) {
+          throw new Error('Room not found.');
+        }
+        const result = room.respondSwitch(socket.id, !!accepted);
+        if (result.swapped) {
+          emitRoomState(io, code);
+        } else {
+          emitRoomState(io, code);
+        }
+      } catch (error) {
+        emitError(socket, error.message);
+      }
+    });
+
+    socket.on('choose_team', ({ roomCode, team }) => {
+      try {
+        const code = normalizeCode(roomCode);
+        const room = manager.getRoom(code);
+        if (!room) {
+          throw new Error('Room not found.');
+        }
+        room.chooseTeam(socket.id, team);
+        emitRoomState(io, code);
+      } catch (error) {
+        emitError(socket, error.message);
+      }
+    });
+
+    socket.on('choose_team', ({ roomCode, team }) => {
+      try {
+        const code = normalizeCode(roomCode);
+        const room = manager.getRoom(code);
+        if (!room) {
+          throw new Error('Room not found.');
+        }
+        room.chooseTeam(socket.id, team);
+        emitRoomState(io, code);
+      } catch (error) {
+        emitError(socket, error.message);
+      }
+    });
   });
 }
 

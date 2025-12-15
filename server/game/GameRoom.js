@@ -34,6 +34,7 @@ class GameRoom {
     this.handAnimationToken = Date.now();
     this.lastChkobbaEvent = null;
     this.winnerId = null;
+    this.pendingSwitch = null;
   }
 
   getMaxPlayers() {
@@ -64,7 +65,96 @@ class GameRoom {
     }
     this.mode = newMode;
     this.teamScores = { A: 0, B: 0 };
+    this.pendingSwitch = null;
     this._assignTeams();
+  }
+
+  chooseTeam(playerId, teamKey) {
+    if (this.mode !== '2v2') {
+      throw new Error('Team selection only available in 2v2.');
+    }
+    if (this.status !== 'waiting' && this.status !== 'finished') {
+      throw new Error('Can only change team from the lobby.');
+    }
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) {
+      throw new Error('Player missing from room');
+    }
+    const key = teamKey === 'B' ? 'B' : 'A';
+    const counts = this._teamCounts();
+    if (counts[key] >= 2) {
+      throw new Error(`${TEAM_NAMES[key]} is full`);
+    }
+    player.team = key;
+    this.pendingSwitch = null;
+    this._assignTeams();
+  }
+
+  requestSwitch(fromId, targetId) {
+    if (this.mode !== '2v2') {
+      throw new Error('Team switching only available in 2v2.');
+    }
+    if (this.status !== 'waiting' && this.status !== 'finished') {
+      throw new Error('Can only switch teams from the lobby.');
+    }
+    if (fromId === targetId) {
+      throw new Error('Cannot switch with yourself.');
+    }
+    if (this.pendingSwitch) {
+      throw new Error('Another switch request is already pending.');
+    }
+    const fromPlayer = this.players.find((p) => p.id === fromId);
+    const target = this.players.find((p) => p.id === targetId);
+    if (!fromPlayer || !target) {
+      throw new Error('Player not found.');
+    }
+    if (!fromPlayer.team || !target.team) {
+      throw new Error('Teams are not set yet.');
+    }
+    if (fromPlayer.team === target.team) {
+      throw new Error('You are already on the same team.');
+    }
+    this.pendingSwitch = { fromId, targetId };
+    this.lastActionLog = `${fromPlayer.username} requested a team swap with ${target.username}.`;
+    return target;
+  }
+
+  respondSwitch(responderId, accepted) {
+    if (!this.pendingSwitch) {
+      throw new Error('No switch request to respond to.');
+    }
+    const { fromId, targetId } = this.pendingSwitch;
+    if (targetId !== responderId) {
+      throw new Error('You are not the target of this request.');
+    }
+    if (this.mode !== '2v2') {
+      this.pendingSwitch = null;
+      throw new Error('Team switching only available in 2v2.');
+    }
+    if (this.status !== 'waiting' && this.status !== 'finished') {
+      this.pendingSwitch = null;
+      throw new Error('Can only switch teams from the lobby.');
+    }
+    const fromPlayer = this.players.find((p) => p.id === fromId);
+    const targetPlayer = this.players.find((p) => p.id === targetId);
+    this.pendingSwitch = null;
+
+    if (!accepted) {
+      this.lastActionLog = `${targetPlayer?.username || 'Player'} declined the team swap.`;
+      return { swapped: false };
+    }
+    if (!fromPlayer || !targetPlayer) {
+      throw new Error('Player not found.');
+    }
+    if (!fromPlayer.team || !targetPlayer.team || fromPlayer.team === targetPlayer.team) {
+      return { swapped: false };
+    }
+    const hostTeam = fromPlayer.team;
+    fromPlayer.team = targetPlayer.team;
+    targetPlayer.team = hostTeam;
+    this._assignTeams();
+    this.lastActionLog = `${fromPlayer.username} and ${targetPlayer.username} swapped teams.`;
+    return { swapped: true, fromId, targetId };
   }
 
   promoteToHost(playerId) {
@@ -123,6 +213,9 @@ class GameRoom {
     if (this.players.length === 0) {
       return;
     }
+    if (this.pendingSwitch && (this.pendingSwitch.fromId === socketId || this.pendingSwitch.targetId === socketId)) {
+      this.pendingSwitch = null;
+    }
     this.dealerIndex = resolveIndex(this.players, dealerId, 0);
     this.tireurIndex = resolveIndex(this.players, tireurId, this.dealerIndex);
     this.turnIndex = resolveIndex(this.players, turnPlayerId, this.tireurIndex);
@@ -160,14 +253,24 @@ class GameRoom {
   }
 
   canStart() {
-    return (
-      this.players.length === this.getMaxPlayers() &&
-      (this.status === 'waiting' || this.status === 'finished')
-    );
+    if (
+      this.players.length !== this.getMaxPlayers() ||
+      (this.status !== 'waiting' && this.status !== 'finished')
+    ) {
+      return false;
+    }
+    if (this.isTeamMode()) {
+      const counts = this._teamCounts();
+      return counts.A === 2 && counts.B === 2;
+    }
+    return true;
   }
 
   startGame() {
     if (!this.canStart()) {
+      if (this.mode === '2v2') {
+        throw new Error('Both teams need 2 players to start.');
+      }
       throw new Error('Need between 2 and 4 players to start.');
     }
     this.roundNumber = 0;
@@ -175,6 +278,7 @@ class GameRoom {
     this.teamScores = { A: 0, B: 0 };
     this.winnerId = null;
     this.lastChkobbaEvent = null;
+    this.pendingSwitch = null;
     this._assignTeams();
     this.players.forEach((p) => {
       p.score = 0;
@@ -341,6 +445,7 @@ class GameRoom {
       player.chkobbaCount = 0;
       player.score = 0;
     });
+    this.pendingSwitch = null;
   }
 
   _calculateScores() {
@@ -562,9 +667,40 @@ class GameRoom {
       });
       return;
     }
-    this.players.forEach((player, index) => {
-      player.team = index % 2 === 0 ? 'A' : 'B';
+    const counts = this._teamCounts();
+    this.players.forEach((player) => {
+      if (player.team !== 'A' && player.team !== 'B') {
+        player.team = null;
+      }
     });
+    this.players.forEach((player) => {
+      if (player.team) {
+        return;
+      }
+      const target = counts.A <= counts.B ? 'A' : 'B';
+      if (counts[target] < 2) {
+        player.team = target;
+        counts[target] += 1;
+      }
+    });
+  }
+
+  _teamCounts() {
+    const counts = { A: 0, B: 0 };
+    this.players.forEach((player) => {
+      if (player.team === 'A') counts.A += 1;
+      else if (player.team === 'B') counts.B += 1;
+    });
+    return counts;
+  }
+
+  _teamCounts() {
+    const counts = { A: 0, B: 0 };
+    this.players.forEach((player) => {
+      if (player.team === 'A') counts.A += 1;
+      else if (player.team === 'B') counts.B += 1;
+    });
+    return counts;
   }
 
   _buildTeamLayout() {

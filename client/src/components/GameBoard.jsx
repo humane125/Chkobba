@@ -16,6 +16,8 @@ function GameBoard({
   fullScreen,
   onLeaveRoom,
   onStopGame,
+  onRespondSwitch,
+  socket,
 }) {
   const [pendingDiscard, setPendingDiscard] = useState(null);
   const [previewInfo, setPreviewInfo] = useState({ cardId: null, targets: [] });
@@ -24,8 +26,9 @@ function GameBoard({
   const [handDealing, setHandDealing] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showCheatHands, setShowCheatHands] = useState(false);
+  const [switchRequest, setSwitchRequest] = useState(null);
 
-  const previewIds = useMemo(() => {
+  const highlightIds = useMemo(() => {
     const ids = new Set();
     previewInfo.targets.forEach((card) => ids.add(card.id));
     return ids;
@@ -117,6 +120,18 @@ function GameBoard({
     [players, selfId, mode],
   );
 
+  useEffect(() => {
+    if (!socket) return undefined;
+    const handleSwitchRequest = ({ fromId, fromName, roomCode }) => {
+      if (roomCode !== session.roomCode) return;
+      setSwitchRequest({ fromId, fromName, roomCode });
+    };
+    socket.on('switch_request', handleSwitchRequest);
+    return () => {
+      socket.off('switch_request', handleSwitchRequest);
+    };
+  }, [socket, session.roomCode]);
+
   const handleHover = (card) => {
     const targets = computeCaptureTargets(card, tableCards);
     setPreviewInfo({ cardId: card.id, targets });
@@ -128,11 +143,6 @@ function GameBoard({
 
   const handleCardClick = (card) => {
     if (!isYourTurn) {
-      return;
-    }
-    const targets = computeCaptureTargets(card, tableCards);
-    if (targets.length === 0) {
-      setPendingDiscard(card);
       return;
     }
     onPlayCard(card.id);
@@ -195,13 +205,13 @@ function GameBoard({
               <span>Chkobba: {chkobba}</span>
               <span>Status: {statusLabel}</span>
             </div>
-          </div>
+        </div>
 
-          <div className="overlay-grid">
-            {seatLayout.north && (
-              <SeatBadge
-                position="north"
-                player={seatLayout.north}
+        <div className="overlay-grid">
+          {seatLayout.north && (
+            <SeatBadge
+              position="north"
+              player={seatLayout.north}
                 selfId={selfId}
                 isTurn={seatLayout.north?.id === turnPlayerId}
                 isDealer={seatLayout.north?.id === dealerId}
@@ -244,16 +254,10 @@ function GameBoard({
                   <CardTile
                     key={card.id}
                     card={card}
-                    highlighted={previewIds.has(card.id)}
+                    highlighted={highlightIds.has(card.id)}
                   />
                 ))}
               </div>
-              {chkobbaFlash && (
-                <div className="overlay-flash">
-                  <img src={POINT_ICON} alt="Chkobba bonus" />
-                  <span>Chkobba!</span>
-                </div>
-              )}
             </div>
 
             <div className="overlay-handbar">
@@ -306,18 +310,6 @@ function GameBoard({
           onCancel={() => setPendingDiscard(null)}
         />
 
-        {awaitingReady && (
-          <RoundSummaryModal
-            breakdown={personalBreakdown}
-            capturedCards={yourCapturedCards}
-            readyPlayerIds={readyPlayerIds}
-            players={players}
-            hasConfirmed={hasConfirmedReady}
-            allBreakdown={lastRoundSummary?.breakdown ?? []}
-            onContinue={onContinueRound}
-          />
-        )}
-
         <ConfirmModal
           open={showStopConfirm}
           title="Return to lobby?"
@@ -330,6 +322,38 @@ function GameBoard({
           }}
           onCancel={() => setShowStopConfirm(false)}
         />
+
+        <ConfirmModal
+          open={Boolean(switchRequest)}
+          title="Team switch request"
+          description={
+            switchRequest
+              ? `${switchRequest.fromName || 'Player'} wants to swap teams with you. Accept?`
+              : ''
+          }
+          confirmLabel="Accept"
+          cancelLabel="Decline"
+          onConfirm={() => {
+            onRespondSwitch(true, switchRequest?.roomCode || session.roomCode);
+            setSwitchRequest(null);
+          }}
+          onCancel={() => {
+            onRespondSwitch(false, switchRequest?.roomCode || session.roomCode);
+            setSwitchRequest(null);
+          }}
+        />
+
+        {awaitingReady && (
+          <RoundSummaryModal
+            breakdown={personalBreakdown}
+            capturedCards={yourCapturedCards}
+            readyPlayerIds={readyPlayerIds}
+            players={players}
+            hasConfirmed={hasConfirmedReady}
+            allBreakdown={lastRoundSummary?.breakdown ?? []}
+            onContinue={onContinueRound}
+          />
+        )}
 
         <ConfirmModal
           open={winnerModalOpen}
@@ -486,7 +510,7 @@ function GameBoard({
                 <CardTile
                   key={card.id}
                   card={card}
-                  highlighted={previewIds.has(card.id)}
+                  highlighted={highlightIds.has(card.id)}
                 />
               ))}
             </div>
@@ -526,6 +550,22 @@ function GameBoard({
             handDealing={handDealing}
           />
         </div>
+        {captureAnim && (
+          <div className="capture-anim-layer">
+            <div className="flying-card">
+              <CardTile card={captureAnim.card} />
+            </div>
+            <div className="capture-bursts">
+              {captureAnim.targets?.map((target, index) => (
+                <span
+                  key={target.id}
+                  className="capture-ping"
+                  style={{ animationDelay: `${index * 90}ms` }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       )}
 
@@ -582,6 +622,26 @@ function GameBoard({
         cancelLabel="Cancel"
         onConfirm={confirmDiscard}
         onCancel={() => setPendingDiscard(null)}
+      />
+
+      <ConfirmModal
+        open={Boolean(switchRequest)}
+        title="Team switch request"
+        description={
+          switchRequest
+            ? `${switchRequest.fromName || 'Player'} wants to swap teams with you. Accept?`
+            : ''
+        }
+        confirmLabel="Accept"
+        cancelLabel="Decline"
+        onConfirm={() => {
+          onRespondSwitch(true, switchRequest?.roomCode || session.roomCode);
+          setSwitchRequest(null);
+        }}
+        onCancel={() => {
+          onRespondSwitch(false, switchRequest?.roomCode || session.roomCode);
+          setSwitchRequest(null);
+        }}
       />
 
       {awaitingReady && (
@@ -1011,6 +1071,11 @@ GameBoard.propTypes = {
   fullScreen: PropTypes.bool,
   onLeaveRoom: PropTypes.func,
   onStopGame: PropTypes.func,
+  onRespondSwitch: PropTypes.func.isRequired,
+  socket: PropTypes.shape({
+    on: PropTypes.func,
+    off: PropTypes.func,
+  }),
 };
 
 SeatView.propTypes = {
@@ -1057,20 +1122,6 @@ CardTile.propTypes = {
   dealIndex: PropTypes.number,
 };
 
-SeatBadge.propTypes = {
-  position: PropTypes.string.isRequired,
-  player: PropTypes.shape({
-    id: PropTypes.string,
-    username: PropTypes.string,
-    handCount: PropTypes.number,
-    team: PropTypes.string,
-  }),
-  selfId: PropTypes.string,
-  isTurn: PropTypes.bool,
-  isDealer: PropTypes.bool,
-  isTireur: PropTypes.bool,
-};
-
 RoundSummaryModal.propTypes = {
   breakdown: PropTypes.shape({
     cards: PropTypes.number,
@@ -1097,6 +1148,7 @@ GameBoard.defaultProps = {
   fullScreen: false,
   onLeaveRoom: () => {},
   onStopGame: () => {},
+  socket: null,
 };
 
 SeatView.defaultProps = {
