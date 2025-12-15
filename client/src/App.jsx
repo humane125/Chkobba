@@ -257,7 +257,7 @@ function App() {
 }
 
 function resolveSocketConfig() {
-  const defaultServer = 'localhost:4000';
+  const defaultServer = 'chkobba.onrender.com';
   const defaultPath = '/socket.io';
   if (typeof window === 'undefined') {
     return {
